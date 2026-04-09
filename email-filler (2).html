@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EmailForge — Smart Email Pattern Filler</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0f;
+  --surface: #111118;
+  --surface2: #18181f;
+  --border: #2a2a38;
+  --border2: #3a3a50;
+  --text: #e8e8f0;
+  --text-muted: #7070a0;
+  --text-faint: #40405a;
+  --accent: #6c63ff;
+  --accent-soft: #6c63ff22;
+  --accent-glow: #6c63ff44;
+  --green: #00d68f;
+  --green-soft: #00d68f18;
+  --amber: #ffb547;
+  --amber-soft: #ffb54718;
+  --red: #ff5470;
+  --red-soft: #ff547018;
+  --mono: 'DM Mono', monospace;
+  --sans: 'DM Sans', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Background grid */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: 0.3;
+  z-index: 0;
+  pointer-events: none;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  top: -200px; left: 50%; transform: translateX(-50%);
+  width: 600px; height: 400px;
+  background: radial-gradient(ellipse, var(--accent-glow) 0%, transparent 70%);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.wrapper { position: relative; z-index: 1; max-width: 860px; margin: 0 auto; padding: 0 24px 60px; }
+
+/* Header */
+header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 36px 0 48px;
+}
+.logo-mark {
+  width: 40px; height: 40px;
+  background: var(--accent);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  box-shadow: 0 0 20px var(--accent-glow);
+  flex-shrink: 0;
+}
+.logo-text h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.03em; }
+.logo-text p { font-size: 12px; color: var(--text-muted); font-family: var(--mono); margin-top: 1px; }
+
+/* Steps indicator */
+.steps {
+  display: flex; align-items: center; gap: 0;
+  margin-bottom: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px;
+}
+.step {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 8px;
+  border-radius: 9px;
+  font-size: 12px; font-weight: 500; color: var(--text-faint);
+  transition: all 0.2s;
+  cursor: default;
+}
+.step.active { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-glow); }
+.step.done { color: var(--green); }
+.step-num {
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600;
+  background: var(--border); color: var(--text-muted);
+  flex-shrink: 0;
+}
+.step.active .step-num { background: var(--accent); color: #fff; }
+.step.done .step-num { background: var(--green); color: #000; }
+.step-sep { width: 1px; height: 24px; background: var(--border); flex-shrink: 0; }
+
+/* Cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px;
+  margin-bottom: 16px;
+  animation: fadeUp 0.3s ease both;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.card-title {
+  font-size: 11px; font-weight: 500; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-muted);
+  margin-bottom: 20px;
+  font-family: var(--mono);
+}
+
+/* Upload zone */
+.upload-zone {
+  border: 1.5px dashed var(--border2);
+  border-radius: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  background: var(--surface2);
+}
+.upload-zone:hover, .upload-zone.drag {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 30px var(--accent-soft);
+}
+.upload-zone input { display: none; }
+.upload-icon-wrap {
+  width: 56px; height: 56px; border-radius: 14px;
+  background: var(--accent-soft); border: 1px solid var(--accent-glow);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; margin: 0 auto 16px;
+}
+.upload-title { font-size: 16px; font-weight: 500; margin-bottom: 6px; }
+.upload-sub { font-size: 13px; color: var(--text-muted); }
+.upload-formats {
+  margin-top: 16px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+}
+.fmt-chip {
+  font-family: var(--mono); font-size: 11px;
+  background: var(--surface); border: 1px solid var(--border2);
+  color: var(--text-muted); padding: 3px 10px; border-radius: 20px;
+}
+
+/* Column mapping */
+.col-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 560px) { .col-grid { grid-template-columns: 1fr; } }
+
+.field-group label { display: block; font-size: 11px; color: var(--text-muted); font-family: var(--mono); margin-bottom: 6px; }
+.field-group select, .field-group input {
+  width: 100%; padding: 10px 12px;
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 8px; color: var(--text);
+  font-family: var(--sans); font-size: 13px;
+  outline: none; transition: border-color 0.15s;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237070a0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+}
+.field-group select:focus, .field-group input:focus { border-color: var(--accent); }
+
+/* Stats row */
+.stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+.stat-box {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px 18px;
+}
+.stat-label { font-size: 11px; color: var(--text-muted); font-family: var(--mono); margin-bottom: 6px; }
+.stat-value { font-size: 28px; font-weight: 600; letter-spacing: -0.04em; }
+.stat-value.accent { color: var(--accent); }
+.stat-value.green { color: var(--green); }
+.stat-value.amber { color: var(--amber); }
+
+/* Pattern pills */
+.pattern-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.p-pill {
+  font-family: var(--mono); font-size: 12px;
+  padding: 5px 12px; border-radius: 6px;
+  border: 1px solid var(--border2); color: var(--text-muted);
+  background: var(--surface2); cursor: default;
+  transition: all 0.15s;
+}
+.p-pill.top {
+  background: var(--accent-soft); border-color: var(--accent);
+  color: var(--accent); box-shadow: 0 0 12px var(--accent-soft);
+}
+.p-pill .cnt { opacity: 0.6; font-size: 11px; margin-left: 4px; }
+
+/* Override bar */
+.override-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.override-row .field-group { flex: 1; min-width: 180px; }
+
+/* Table */
+.table-outer {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden;
+}
+.table-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead tr { border-bottom: 1px solid var(--border); }
+th {
+  padding: 12px 14px; text-align: left;
+  font-size: 10px; font-weight: 500; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-muted);
+  font-family: var(--mono); white-space: nowrap;
+  background: var(--surface);
+}
+td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #ffffff05; }
+
+.email-mono { font-family: var(--mono); font-size: 12px; }
+.email-gen { color: var(--accent); }
+.email-existing { color: var(--green); }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+  padding: 3px 9px; border-radius: 20px; font-family: var(--mono);
+}
+.badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; display: block; }
+.badge-existing { background: var(--green-soft); color: var(--green); border: 1px solid #00d68f33; }
+.badge-existing::before { background: var(--green); }
+.badge-generated { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-glow); }
+.badge-generated::before { background: var(--accent); }
+.badge-missing { background: var(--amber-soft); color: var(--amber); border: 1px solid #ffb54733; }
+.badge-missing::before { background: var(--amber); }
+
+/* Search */
+.table-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.search-wrap { position: relative; flex: 1; min-width: 180px; }
+.search-wrap input {
+  width: 100%; padding: 9px 12px 9px 34px;
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 8px; color: var(--text); font-size: 13px; outline: none;
+  font-family: var(--sans);
+}
+.search-wrap input:focus { border-color: var(--accent); }
+.search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 14px; pointer-events: none; }
+
+.filter-btn {
+  padding: 9px 14px; background: var(--surface2);
+  border: 1px solid var(--border2); border-radius: 8px;
+  color: var(--text-muted); font-size: 12px; cursor: pointer;
+  font-family: var(--mono); transition: all 0.15s; white-space: nowrap;
+}
+.filter-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.filter-btn:hover { border-color: var(--border); color: var(--text); }
+
+/* Buttons */
+.btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 11px 20px; border-radius: 9px; font-size: 14px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s; border: 1px solid transparent;
+  font-family: var(--sans);
+}
+.btn-primary {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+  box-shadow: 0 0 20px var(--accent-soft);
+}
+.btn-primary:hover { background: #7d75ff; box-shadow: 0 0 30px var(--accent-glow); transform: translateY(-1px); }
+.btn-secondary {
+  background: var(--surface2); color: var(--text-muted);
+  border-color: var(--border2);
+}
+.btn-secondary:hover { border-color: var(--border); color: var(--text); }
+.btn-download {
+  background: var(--green-soft); color: var(--green);
+  border-color: #00d68f33;
+}
+.btn-download:hover { background: #00d68f25; box-shadow: 0 0 20px var(--green-soft); transform: translateY(-1px); }
+
+/* Notice bar */
+.notice {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 12px 16px; border-radius: 9px;
+  font-size: 13px; line-height: 1.5;
+  margin-top: 12px;
+}
+.notice.info { background: var(--accent-soft); border: 1px solid var(--accent-glow); color: #a0a0ff; }
+.notice.warn { background: var(--amber-soft); border: 1px solid #ffb54733; color: var(--amber); }
+
+/* No data */
+.empty-state { text-align: center; padding: 40px; color: var(--text-muted); }
+.empty-state .e-icon { font-size: 32px; margin-bottom: 10px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* Phase display */
+.phase { display: none; }
+.phase.visible { display: block; }
+
+/* Footer */
+footer { text-align: center; padding: 24px 0; color: var(--text-faint); font-size: 12px; font-family: var(--mono); border-top: 1px solid var(--border); margin-top: 40px; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <header>
+    <div class="logo-mark">⚡</div>
+    <div class="logo-text">
+      <h1>EmailForge</h1>
+      <p>// smart email pattern filler</p>
+    </div>
+  </header>
+
+  <!-- Steps -->
+  <div class="steps" id="steps-bar">
+    <div class="step active" id="step-1"><span class="step-num">1</span> Upload</div>
+    <div class="step-sep"></div>
+    <div class="step" id="step-2"><span class="step-num">2</span> Map Columns</div>
+    <div class="step-sep"></div>
+    <div class="step" id="step-3"><span class="step-num">3</span> Review & Export</div>
+  </div>
+
+  <!-- Phase 1: Upload -->
+  <div class="phase visible" id="phase-upload">
+    <div class="card">
+      <div class="card-title">// 01 — upload your file</div>
+      <div class="upload-zone" id="dropzone">
+        <input type="file" id="file-input" accept=".xlsx,.xls,.csv">
+        <div class="upload-icon-wrap">📊</div>
+        <div class="upload-title">Drop your spreadsheet here</div>
+        <div class="upload-sub">or click anywhere to browse your files</div>
+        <div class="upload-formats">
+          <span class="fmt-chip">.xlsx</span>
+          <span class="fmt-chip">.xls</span>
+          <span class="fmt-chip">.csv</span>
+        </div>
+      </div>
+      <div class="notice info" style="margin-top:16px;">
+        <span>💡</span>
+        <span>Your file needs columns for <strong>prospect name</strong>, <strong>company</strong>, and optionally <strong>email</strong>. You'll map them in the next step.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Phase 2: Map -->
+  <div class="phase" id="phase-map">
+    <div class="card">
+      <div class="card-title">// 02 — map your columns</div>
+      <p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">We detected your columns below. Match them to the right fields — we've auto-guessed where possible.</p>
+      <div class="col-grid">
+        <div class="field-group"><label>FIRST NAME</label><select id="col-first"></select></div>
+        <div class="field-group"><label>LAST NAME</label><select id="col-last"></select></div>
+        <div class="field-group"><label>EMAIL (known, can be blank)</label><select id="col-email"></select></div>
+        <div class="field-group"><label>COMPANY</label><select id="col-company"></select></div>
+      </div>
+      <div class="notice warn" style="margin-top:16px;" id="split-notice">
+        <span>⚠️</span>
+        <span>If your spreadsheet has a single "Full Name" column, select it for <strong>First Name</strong> — we'll auto-split it.</span>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="doAnalyse()">⚡ Analyse &amp; Generate Emails</button>
+      <button class="btn btn-secondary" onclick="goPhase(1)">← Back</button>
+    </div>
+  </div>
+
+  <!-- Phase 3: Result -->
+  <div class="phase" id="phase-result">
+    <div class="stats-row">
+      <div class="stat-box"><div class="stat-label">// total rows</div><div class="stat-value" id="stat-total">0</div></div>
+      <div class="stat-box"><div class="stat-label">// generated</div><div class="stat-value accent" id="stat-gen">0</div></div>
+      <div class="stat-box"><div class="stat-label">// already had email</div><div class="stat-value green" id="stat-known">0</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">// detected email patterns</div>
+      <div class="pattern-pills" id="pattern-pills"></div>
+      <p style="font-size:11px;color:var(--text-faint);margin-top:10px;font-family:var(--mono);">highlighted = most common → used for generation</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">// override settings</div>
+      <div class="override-row">
+        <div class="field-group"><label>FORMAT OVERRIDE</label><select id="sel-fmt" onchange="reGenerate()"></select></div>
+        <div class="field-group"><label>DOMAIN OVERRIDE</label><select id="sel-dom" onchange="reGenerate()"></select></div>
+      </div>
+    </div>
+
+    <div class="card" style="padding: 20px;">
+      <div class="card-title">// generated emails</div>
+      <div class="table-controls">
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="search-input" placeholder="Search name, company, email…" oninput="renderTable()">
+        </div>
+        <button class="filter-btn" id="filter-all" onclick="setFilter('all')">All</button>
+        <button class="filter-btn" id="filter-generated" onclick="setFilter('generated')">Generated only</button>
+        <button class="filter-btn" id="filter-missing" onclick="setFilter('missing')">Missing info</button>
+      </div>
+      <div class="table-outer">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Company</th>
+                <th>Email</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="result-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-download" onclick="doDownload()">⬇ Download Filled Excel</button>
+      <button class="btn btn-secondary" onclick="goPhase(1)">↑ Upload New File</button>
+    </div>
+  </div>
+
+</div>
+
+<footer>EmailForge — runs 100% in your browser · no data leaves your device</footer>
+
+<script>
+const FORMATS = [
+  { id: 'first.last',  label: 'firstname.lastname',  fn: (f,l,d) => `${f}.${l}@${d}` },
+  { id: 'firstlast',   label: 'firstnamelastname',   fn: (f,l,d) => `${f}${l}@${d}` },
+  { id: 'f.last',      label: 'f.lastname',           fn: (f,l,d) => `${f[0]}.${l}@${d}` },
+  { id: 'flast',       label: 'flastname',            fn: (f,l,d) => `${f[0]}${l}@${d}` },
+  { id: 'first_last',  label: 'firstname_lastname',   fn: (f,l,d) => `${f}_${l}@${d}` },
+  { id: 'last.first',  label: 'lastname.firstname',   fn: (f,l,d) => `${l}.${f}@${d}` },
+  { id: 'lastfirst',   label: 'lastnamefirstname',    fn: (f,l,d) => `${l}${f}@${d}` },
+  { id: 'first',       label: 'firstname only',       fn: (f,l,d) => `${f}@${d}` },
+  { id: 'last',        label: 'lastname only',        fn: (f,l,d) => `${l}@${d}` },
+  { id: 'f_last',      label: 'f_lastname',           fn: (f,l,d) => `${f[0]}_${l}@${d}` },
+];
+
+let state = {
+  phase: 1,
+  headers: [],
+  rawRows: [],
+  rows: [],
+  analysis: null,
+  generated: [],
+  filter: 'all',
+};
+
+const norm = s => (s||'').toLowerCase().trim().replace(/\s+/g,' ');
+const $ = id => document.getElementById(id);
+
+function detectDomain(email) {
+  const m = (email||'').match(/@(.+)$/);
+  return m ? m[1].toLowerCase() : null;
+}
+
+function detectFormat(email, first, last) {
+  const local = (email||'').split('@')[0].toLowerCase();
+  const f = norm(first).replace(/\s+/g,'');
+  const l = norm(last).replace(/\s+/g,'');
+  if (!f || !l) return null;
+  for (const fmt of FORMATS) {
+    const expected = fmt.fn(f, l, 'x').split('@')[0];
+    if (local === expected) return fmt.id;
+  }
+  return null;
+}
+
+function generateEmail(first, last, domain, formatId) {
+  const fmt = FORMATS.find(f => f.id === formatId);
+  if (!fmt || !domain) return null;
+  const f = norm(first).replace(/\s+/g,'');
+  const l = norm(last).replace(/\s+/g,'');
+  if (!f || !l) return null;
+  return fmt.fn(f, l, domain);
+}
+
+function splitName(fullName) {
+  const parts = (fullName||'').trim().split(/\s+/);
+  if (parts.length === 1) return { first: parts[0], last: '' };
+  return { first: parts[0], last: parts.slice(1).join(' ') };
+}
+
+// ─── Core analysis: builds per-company domain + format maps ──────────────────
+function analyzeData(rows) {
+  // companyData[normCompany] = { domains: {domain: count}, formats: {fmt: count} }
+  const companyData = {};
+  const globalDomainCount = {};
+  const globalFormatCount = {};
+
+  rows.forEach(r => {
+    if (!r.email) return;
+
+    const domain = detectDomain(r.email);
+    const fmt    = detectFormat(r.email, r.firstName, r.lastName);
+    const co     = norm(r.company);
+
+    if (domain) {
+      globalDomainCount[domain] = (globalDomainCount[domain]||0) + 1;
+      if (co) {
+        if (!companyData[co]) companyData[co] = { domains: {}, formats: {} };
+        companyData[co].domains[domain] = (companyData[co].domains[domain]||0) + 1;
+      }
+    }
+    if (fmt) {
+      globalFormatCount[fmt] = (globalFormatCount[fmt]||0) + 1;
+      if (co) {
+        if (!companyData[co]) companyData[co] = { domains: {}, formats: {} };
+        companyData[co].formats[fmt] = (companyData[co].formats[fmt]||0) + 1;
+      }
+    }
+  });
+
+  // For each company: pick the most frequent domain and most frequent format
+  const companyBest = {};
+  Object.entries(companyData).forEach(([co, data]) => {
+    const topDomain = Object.entries(data.domains).sort((a,b)=>b[1]-a[1])[0];
+    const topFmt    = Object.entries(data.formats).sort((a,b)=>b[1]-a[1])[0];
+    companyBest[co] = {
+      domain: topDomain ? topDomain[0] : null,
+      format: topFmt    ? topFmt[0]    : null,
+    };
+  });
+
+  const topGlobalDomain = Object.entries(globalDomainCount).sort((a,b)=>b[1]-a[1])[0];
+  const topGlobalFormat = Object.entries(globalFormatCount).sort((a,b)=>b[1]-a[1])[0];
+
+  return {
+    companyBest,          // per-company { domain, format }
+    globalDomainCount,
+    globalFormatCount,
+    topDomain: topGlobalDomain?.[0] || null,
+    topFormat: topGlobalFormat?.[0] || null,
+    totalKnown:   rows.filter(r => r.email).length,
+    totalMissing: rows.filter(r => !r.email).length,
+  };
+}
+
+// ─── Resolve domain+format for a single row ───────────────────────────────────
+// Returns { domain, format } using company-specific data first, then global fallback
+function resolveForRow(r, a, fmtOverride, domOverride) {
+  const co = norm(r.company);
+  const best = co ? (a.companyBest[co] || {}) : {};
+
+  const domain = domOverride  || best.domain || a.topDomain;
+  const format = fmtOverride  || best.format || a.topFormat;
+  return { domain, format };
+}
+
+function guessCol(headers, keywords) {
+  return headers.find(h => keywords.some(k => norm(h).includes(k))) || '';
+}
+
+// ─── Phase navigation ─────────────────────────────────────────────────────────
+function goPhase(n) {
+  state.phase = n;
+  ['upload','map','result'].forEach((name, i) => {
+    $('phase-'+name).classList.toggle('visible', i+1===n);
+  });
+  [1,2,3].forEach(i => {
+    const el = $('step-'+i);
+    el.classList.remove('active','done');
+    if (i < n) el.classList.add('done');
+    if (i === n) el.classList.add('active');
+    el.querySelector('.step-num').textContent = i < n ? '✓' : i;
+  });
+}
+
+// ─── File handling ────────────────────────────────────────────────────────────
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (data.length < 2) { alert('File seems empty or has only headers.'); return; }
+      state.headers = data[0].map(String);
+      state.rawRows = data.slice(1).map(row => {
+        const obj = {};
+        state.headers.forEach((h,i) => obj[h] = String(row[i]||'').trim());
+        return obj;
+      });
+      buildColumnSelects();
+      goPhase(2);
+    } catch(err) { alert('Could not read file: ' + err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function buildColumnSelects() {
+  const h = state.headers;
+  const noneOpt = '<option value="">— not mapped —</option>';
+  const opts = h.map(c => `<option value="${c}">${c}</option>`).join('');
+
+  const firstGuess = guessCol(h, ['first name','firstname','first','prospect','name','contact']);
+  const lastGuess  = guessCol(h, ['last name','lastname','last','surname']);
+  const emailGuess = guessCol(h, ['email','e-mail','mail']);
+  const compGuess  = guessCol(h, ['company','organisation','organization','account','firm']);
+
+  ['col-first','col-last','col-email','col-company'].forEach(id => {
+    $(id).innerHTML = noneOpt + opts;
+  });
+  if (firstGuess) $('col-first').value  = firstGuess;
+  if (lastGuess)  $('col-last').value   = lastGuess;
+  if (emailGuess) $('col-email').value  = emailGuess;
+  if (compGuess)  $('col-company').value = compGuess;
+}
+
+// ─── Analyse ──────────────────────────────────────────────────────────────────
+function doAnalyse() {
+  const colFirst   = $('col-first').value;
+  const colLast    = $('col-last').value;
+  const colEmail   = $('col-email').value;
+  const colCompany = $('col-company').value;
+
+  state.rows = state.rawRows.map(row => {
+    let firstName = colFirst ? (row[colFirst]||'') : '';
+    let lastName  = colLast  ? (row[colLast]||'')  : '';
+    if (firstName && !lastName && !colLast) {
+      const sp = splitName(firstName);
+      firstName = sp.first; lastName = sp.last;
+    }
+    return {
+      firstName: firstName.trim(),
+      lastName:  lastName.trim(),
+      email:     colEmail   ? (row[colEmail]||'').trim()   : '',
+      company:   colCompany ? (row[colCompany]||'').trim() : '',
+      _raw: row,
+    };
+  });
+
+  state.analysis = analyzeData(state.rows);
+  buildResultUI();
+  reGenerate();
+  goPhase(3);
+}
+
+function buildResultUI() {
+  const a = state.analysis;
+  $('stat-total').textContent = state.rows.length;
+  $('stat-known').textContent = a.totalKnown;
+
+  // Pattern pills — global format counts
+  const pills = Object.entries(a.globalFormatCount).sort((x,y)=>y[1]-x[1]).map(([id,cnt]) => {
+    const label = FORMATS.find(f=>f.id===id)?.label || id;
+    return `<span class="p-pill ${id===a.topFormat?'top':''}">${label}<span class="cnt">×${cnt}</span></span>`;
+  }).join('');
+  $('pattern-pills').innerHTML = pills || '<span style="color:var(--text-faint);font-size:13px;">No patterns detected from known emails</span>';
+
+  // Format select — "Auto (per company)" as first option
+  $('sel-fmt').innerHTML =
+    `<option value="">Auto (per company)</option>` +
+    FORMATS.map(f => `<option value="${f.id}">${f.label}</option>`).join('');
+
+  // Domain select — "Auto (per company)" as first option
+  const domOpts = Object.entries(a.globalDomainCount).sort((x,y)=>y[1]-x[1])
+    .map(([d,cnt]) => `<option value="${d}">${d} (${cnt})</option>`).join('');
+  $('sel-dom').innerHTML = `<option value="">Auto (per company)</option>` + domOpts;
+}
+
+// ─── Generate emails — key function ──────────────────────────────────────────
+function reGenerate() {
+  const fmtOverride = $('sel-fmt').value; // '' = auto
+  const domOverride = $('sel-dom').value; // '' = auto
+  const a = state.analysis;
+
+  state.generated = state.rows.map(r => {
+    if (r.email) return { ...r, generatedEmail: r.email, status: 'existing', usedDomain: detectDomain(r.email), usedFormat: null };
+
+    // Resolve domain and format specifically for THIS row's company
+    const { domain, format } = resolveForRow(r, a, fmtOverride, domOverride);
+    const em = (domain && format) ? generateEmail(r.firstName, r.lastName, domain, format) : null;
+
+    return { ...r, generatedEmail: em, status: em ? 'generated' : 'missing', usedDomain: domain, usedFormat: format };
+  });
+
+  $('stat-gen').textContent = state.generated.filter(r=>r.status==='generated').length;
+  renderTable();
+}
+
+// ─── Filter & table ───────────────────────────────────────────────────────────
+function setFilter(f) {
+  state.filter = f;
+  ['all','generated','missing'].forEach(id => {
+    $('filter-'+id).classList.toggle('active', id===f);
+  });
+  renderTable();
+}
+
+function renderTable() {
+  const q   = ($('search-input')?.value||'').toLowerCase();
+  const fil = state.filter;
+
+  const filtered = state.generated.filter(r => {
+    if (fil === 'generated' && r.status !== 'generated') return false;
+    if (fil === 'missing'   && r.status !== 'missing')   return false;
+    if (!q) return true;
+    return [r.firstName, r.lastName, r.company, r.generatedEmail].some(v => (v||'').toLowerCase().includes(q));
+  });
+
+  if (!filtered.length) {
+    $('result-tbody').innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="e-icon">🔍</div>No rows match your filter</div></td></tr>`;
+    return;
+  }
+
+  $('result-tbody').innerHTML = filtered.map((r,i) => {
+    const fullName = [r.firstName, r.lastName].filter(Boolean).join(' ') || '—';
+    const emailCell = r.generatedEmail
+      ? `<span class="email-mono ${r.status==='existing'?'email-existing':'email-gen'}">${r.generatedEmail}</span>`
+      : `<span style="color:var(--text-faint)">—</span>`;
+    const badge = r.status==='existing'
+      ? `<span class="badge badge-existing">existing</span>`
+      : r.status==='generated'
+        ? `<span class="badge badge-generated">generated</span>`
+        : `<span class="badge badge-missing">no info</span>`;
+    return `<tr>
+      <td style="color:var(--text-faint);font-family:var(--mono);font-size:11px;">${i+1}</td>
+      <td>${fullName}</td>
+      <td style="color:var(--text-muted)">${r.company||'—'}</td>
+      <td>${emailCell}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── Download ─────────────────────────────────────────────────────────────────
+function doDownload() {
+  const fmtOverride = $('sel-fmt').value;
+  const domOverride = $('sel-dom').value;
+  const a = state.analysis;
+
+  const out = state.rows.map(r => {
+    let finalEmail = r.email;
+    if (!finalEmail) {
+      const { domain, format } = resolveForRow(r, a, fmtOverride, domOverride);
+      finalEmail = (domain && format) ? generateEmail(r.firstName, r.lastName, domain, format) : '';
+    }
+    const obj = { ...r._raw };
+    obj['Generated Email'] = finalEmail || '';
+    obj['Email Status'] = r.email ? 'existing' : (finalEmail ? 'generated' : 'missing (info insufficient)');
+    return obj;
+  });
+
+  const ws = XLSX.utils.json_to_sheet(out);
+  ws['!cols'] = Object.keys(out[0]||{}).map(() => ({ wch: 24 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Emails Filled');
+  XLSX.writeFile(wb, 'emailforge_filled.xlsx');
+}
+
+// ─── Event wiring ─────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const dz = $('dropzone');
+  const fi = $('file-input');
+
+  // Click on zone triggers file input (but not when clicking the input itself)
+  dz.addEventListener('click', (e) => {
+    if (e.target !== fi) fi.click();
+  });
+
+  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('drag');
+    handleFile(e.dataTransfer.files[0]);
+  });
+
+  fi.addEventListener('change', e => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+  });
+
+  setFilter('all');
+});
+</script>
+</body>
+</html>
